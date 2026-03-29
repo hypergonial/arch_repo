@@ -1,0 +1,122 @@
+on:
+  schedule:
+    - cron: "15 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-slim
+    outputs:
+      latest_version: ${{ steps.latest_version.outputs.latest_version }}
+      current_version: ${{ steps.latest_version.outputs.current_version }}
+      current_pkgrel: ${{ steps.latest_version.outputs.current_pkgrel }}
+      desired_pkgrel: ${{ steps.latest_version.outputs.desired_pkgrel }}
+      up_to_date: ${{ steps.latest_version.outputs.up_to_date }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Check latest version of opencloud-eu/desktop
+        id: latest_version
+        shell: bash
+        run: |
+          latest=$(curl -sfL https://api.github.com/repos/opencloud-eu/desktop/releases/latest | jq -r '.tag_name')
+          latest="${latest#v}"
+          current="$(cat PKGBUILD | grep -E '^pkgver=' | head -n1 | cut -d= -f2)"
+          current_pkgrel=$(cat PKGBUILD | grep -E '^pkgrel=' | head -n1 | cut -d= -f2)
+          is_up_to_date=$(if [ "$current" = "$latest" ]; then echo 'true'; else echo 'false'; fi)
+          desired_pkgrel=$(if [ "$is_up_to_date" = "true" ]; then echo "$((current_pkgrel + 1))"; else echo "1"; fi)
+
+          echo "Up to date: $is_up_to_date"
+          echo "Latest version: $latest"
+          echo "Current version: $current"
+          echo "Current pkgrel: $current_pkgrel"
+          echo "Desired pkgrel: $desired_pkgrel"
+
+          echo "latest_version=$latest" >> $GITHUB_OUTPUT
+          echo "current_version=$current" >> $GITHUB_OUTPUT
+          echo "up_to_date=$is_up_to_date" >> $GITHUB_OUTPUT
+          echo "current_pkgrel=$current_pkgrel" >> $GITHUB_OUTPUT
+          echo "desired_pkgrel=$desired_pkgrel" >> $GITHUB_OUTPUT
+
+  update:
+    needs: check
+    if: needs.check.outputs.up_to_date == 'false' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    steps:
+      - name: Initialize pacman-key
+        run: |
+          pacman-key --init
+
+      - name: Update system
+        run: |
+          pacman -Syu --noconfirm
+
+      - name: Install tools
+        run: |
+          pacman -Sy --noconfirm --needed git tar zstd gnupg github-cli
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: repo
+
+      - name: Update PKGBUILD
+        uses: ./repo/.github/actions/update-pkgbuild.yaml
+        with:
+          version: ${{ needs.check.outputs.latest_version }}
+          pkgrel: ${{ needs.check.outputs.desired_pkgrel }}
+          file: "repo/PKGBUILD"
+
+      # TODO: Signing the package would be nice
+
+      - name: Make package
+        id: package
+        working-directory: repo
+        run: |
+          makepkg --noconfirm
+          echo path="$(ls -1 *.pkg.tar.zst | grep -v -- '-debug-' | head -n1)" >> $GITHUB_OUTPUT
+
+      - name: Create repository db
+        id: repo
+        working-directory: repo
+        run: |
+          repo-add opencloud-desktop-bin.db.tar.zst ${{ steps.package.outputs.path }}
+          echo path=opencloud-desktop-bin.db.tar.zst >> $GITHUB_OUTPUT
+
+      - name: Delete all assets from existing release
+        shell: bash
+        run: |
+          gh release view "archlinux" --repo "${{ github.repository }}" > /dev/null 2>&1 || exit 0
+          echo "Release exists, deleting existing assets..."
+          gh release view "archlinux" --repo "${{ github.repository }}" --json assets -q '.assets[].id' | while read asset_id; do
+            echo "Deleting asset with ID: $asset_id"
+            gh api --method DELETE "/repos/${{ github.repository }}/releases/assets/$asset_id"
+          done
+          echo "All assets deleted."
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: archlinux
+          files: |
+            repo/${{ steps.package.outputs.path }}
+            repo/${{ steps.repo.outputs.path }}
+          token: ${{ github.token }}
+          overwrite_files: true
+
+      - name: Push updated PKGBUILD
+        shell: bash
+        working-directory: repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add PKGBUILD
+          git commit -m "Bump PKGBUILD to ${{ needs.check.outputs.latest_version }}-${{ needs.check.outputs.desired_pkgrel }}"
+          git push origin ${{ github.event.repository.default_branch }}
