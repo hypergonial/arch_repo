@@ -61,11 +61,20 @@ jobs:
         run: |
           pacman -Sy --noconfirm --needed git tar zstd gnupg github-cli
 
+      - name: Create user
+        run: |
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.repository.default_branch }}
           path: repo
+
+      - name: Set permissions for builder
+        run: |
+          chown -R builder:builder repo
 
       - name: Update PKGBUILD
         uses: ./repo/.github/actions/update-pkgbuild
@@ -80,7 +89,7 @@ jobs:
         id: package
         working-directory: repo
         run: |
-          makepkg --noconfirm
+          sudo -u builder makepkg --noconfirm
           echo path="$(ls -1 *.pkg.tar.zst | grep -v -- '-debug-' | head -n1)" >> $GITHUB_OUTPUT
 
       - name: Create repository db
