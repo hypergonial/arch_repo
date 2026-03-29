@@ -89,7 +89,7 @@ jobs:
         id: package
         working-directory: repo
         run: |
-          sudo -u builder makepkg --noconfirm
+          sudo -u builder makepkg --syncdeps --noconfirm --needed --cleanbuild
           echo path="$(ls -1 *.pkg.tar.zst | grep -v -- '-debug-' | head -n1)" >> $GITHUB_OUTPUT
 
       - name: Create repository db
