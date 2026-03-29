@@ -68,7 +68,7 @@ jobs:
           path: repo
 
       - name: Update PKGBUILD
-        uses: ./repo/.github/actions/update-pkgbuild.yaml
+        uses: ./repo/.github/actions/update-pkgbuild
         with:
           version: ${{ needs.check.outputs.latest_version }}
           pkgrel: ${{ needs.check.outputs.desired_pkgrel }}
