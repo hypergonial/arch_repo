@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Should return the latest version of the software as a string, 
+# without any leading "v" or other characters.
+fetch_latest_version() {
+    latest=$(curl -sfL https://api.github.com/repos/opencloud-eu/desktop/releases/latest | jq -r '.tag_name')
+    latest="${latest#v}"
+
+    echo "$latest"
+}
+
+# Should return "true" if the package can be built in parallel, or "false" otherwise.
+can_parallel_build() {
+    echo "true"
+}

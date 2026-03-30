@@ -5,69 +5,58 @@ on:
   workflow_dispatch:
 
 env:
-  PARALLEL_BUILD: true
+  REPO_RELEASE_NAME: "current"
+  REPO_FILENAME: "hypergonial"
+  REPO_URL: "https://github.com/hypergonial/arch_repo/releases/download/current"
 
 jobs:
   check:
+    name: Check for package updates
     runs-on: ubuntu-slim
     outputs:
-      latest_version: ${{ steps.latest_version.outputs.latest_version }}
-      current_version: ${{ steps.latest_version.outputs.current_version }}
-      current_pkgrel: ${{ steps.latest_version.outputs.current_pkgrel }}
-      desired_pkgrel: ${{ steps.latest_version.outputs.desired_pkgrel }}
-      up_to_date: ${{ steps.latest_version.outputs.up_to_date }}
+      needs_run: ${{ steps.gen_matrix.outputs.is_empty == 'false' }}
+      matrix: ${{ steps.gen_matrix.outputs.matrix }}
     steps:
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 curl jq
+
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.repository.default_branch }}
 
-      - name: Check latest version of opencloud-eu/desktop
-        id: latest_version
+      - name: Check all packages for updates
+        id: gen_matrix
         shell: bash
         run: |
-          latest=$(curl -sfL https://api.github.com/repos/opencloud-eu/desktop/releases/latest | jq -r '.tag_name')
-          latest="${latest#v}"
-          current="$(cat PKGBUILD | grep -E '^pkgver=' | head -n1 | cut -d= -f2)"
-          current_pkgrel=$(cat PKGBUILD | grep -E '^pkgrel=' | head -n1 | cut -d= -f2)
-          is_up_to_date=$(if [ "$current" = "$latest" ]; then echo 'true'; else echo 'false'; fi)
-          desired_pkgrel=$(if [ "$is_up_to_date" = "true" ]; then echo "$((current_pkgrel + 1))"; else echo "1"; fi)
+          # Outputs: is_empty, matrix
+          python3 .github/workflows/check_packages.py
 
-          echo "Up to date: $is_up_to_date"
-          echo "Latest version: $latest"
-          echo "Current version: $current"
-          echo "Current pkgrel: $current_pkgrel"
-          echo "Desired pkgrel: $desired_pkgrel"
-
-          echo "latest_version=$latest" >> $GITHUB_OUTPUT
-          echo "current_version=$current" >> $GITHUB_OUTPUT
-          echo "up_to_date=$is_up_to_date" >> $GITHUB_OUTPUT
-          echo "current_pkgrel=$current_pkgrel" >> $GITHUB_OUTPUT
-          echo "desired_pkgrel=$desired_pkgrel" >> $GITHUB_OUTPUT
-
-  update:
+  build:
+    name: Build ${{ matrix.name }} ${{ matrix.latest_version }}-${{ matrix.desired_pkgrel }}
     needs: check
-    if: needs.check.outputs.up_to_date == 'false' || github.event_name == 'workflow_dispatch'
+    if: needs.check.outputs.needs_run == 'true'
     runs-on: ubuntu-latest
     container:
       image: archlinux:base-devel
-    permissions:
-      contents: write
+    strategy:
+      matrix: ${{ fromJson(needs.check.outputs.matrix) }}
     steps:
-      - name: Initialize pacman-key
-        run: |
-          pacman-key --init
-
       - name: Update system
         run: |
+          pacman-key --init
           pacman -Syu --noconfirm
 
       - name: Install tools
         run: |
-          pacman -Sy --noconfirm --needed git tar zstd gnupg github-cli
+          pacman -Sy --noconfirm --needed git tar zstd gnupg curl
 
       - name: Get job count
         id: jobs
+        env:
+          PARALLEL_BUILD: ${{ matrix.parallel_build }}
         run: |
           if [ "$PARALLEL_BUILD" = "true" ]; then
             count=$(nproc)
@@ -91,15 +80,15 @@ jobs:
       - name: Update PKGBUILD
         uses: ./repo/.github/actions/update-pkgbuild
         with:
-          version: ${{ needs.check.outputs.latest_version }}
-          pkgrel: ${{ needs.check.outputs.desired_pkgrel }}
-          file: "repo/PKGBUILD"
+          version: ${{ matrix.latest_version }}
+          pkgrel: ${{ matrix.desired_pkgrel }}
+          file: "repo/${{ matrix.name }}/PKGBUILD"
 
       # TODO: Signing the package would be nice
 
       - name: Make package
         id: package
-        working-directory: repo
+        working-directory: repo/${{ matrix.name }}
         env:
           MAKEFLAGS: "-j${{ steps.jobs.outputs.count }}"
           CMAKE_BUILD_PARALLEL_LEVEL: ${{ steps.jobs.outputs.count }}
@@ -109,51 +98,79 @@ jobs:
           echo path="$(ls -1 *.pkg.tar.zst | grep -v -- '-debug-' | head -n1)" >> $GITHUB_OUTPUT
           chown -R root:root .
 
-      - name: Create repository db
-        id: repo
-        working-directory: repo
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: pkg-${{ matrix.name }}
+          path: repo/${{ matrix.name }}/${{ steps.package.outputs.path }}
+          retention-days: 1
+
+  update_repo:
+    name: Update repository files
+    needs: [check, build]
+    if: needs.check.outputs.needs_run == 'true'
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    permissions:
+      contents: write
+    steps:
+      - name: Update system
         run: |
-          repo-add opencloud-desktop-bin.db.tar.zst ${{ steps.package.outputs.path }}
+          pacman-key --init
+          pacman -Syu --noconfirm
 
-          echo path=opencloud-desktop-bin.db >> $GITHUB_OUTPUT
-          echo files_path=opencloud-desktop-bin.files >> $GITHUB_OUTPUT
-          echo path_zst=opencloud-desktop-bin.db.tar.zst >> $GITHUB_OUTPUT
-          echo files_path_zst=opencloud-desktop-bin.files.tar.zst >> $GITHUB_OUTPUT
+      - name: Install tools
+        run: |
+          pacman -Sy --noconfirm --needed git tar zstd gnupg curl github-cli
 
-      - name: Delete all assets from existing release
+      - name: Download artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: pkg-*
+          path: packages
+
+      - name: Download existing repository db
+        shell: bash
+        continue-on-error: true
+        run: |
+          curl -sfL -o ${{ env.REPO_FILENAME }}.db.tar.zst "${{ env.REPO_URL }}/${{ env.REPO_FILENAME }}.db.tar.zst"
+          curl -sfL -o ${{ env.REPO_FILENAME }}.files.tar.zst "${{ env.REPO_URL }}/${{ env.REPO_FILENAME }}.files.tar.zst"
+          ln -s ${{ env.REPO_FILENAME }}.db.tar.zst ${{ env.REPO_FILENAME }}.db
+          ln -s ${{ env.REPO_FILENAME }}.files.tar.zst ${{ env.REPO_FILENAME }}.files
+
+      - name: Update repository db
+        id: repo
+        run: |
+          # Find every package file and add it to the repo
+          for pkg in $(find packages -name '*.pkg.tar.zst'); do
+            repo-add "${{ env.REPO_FILENAME }}.db.tar.zst" "$pkg"
+          done
+
+          echo path=${{ env.REPO_FILENAME }}.db >> $GITHUB_OUTPUT
+          echo files_path=${{ env.REPO_FILENAME }}.files >> $GITHUB_OUTPUT
+          echo path_zst=${{ env.REPO_FILENAME }}.db.tar.zst >> $GITHUB_OUTPUT
+          echo files_path_zst=${{ env.REPO_FILENAME }}.files.tar.zst >> $GITHUB_OUTPUT
+
+      - name: Create Release (if not exists)
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "archlinux" --repo "${{ github.repository }}" > /dev/null 2>&1 || exit 0
-          echo "Release exists, deleting existing assets..."
-          gh release view "archlinux" --repo "${{ github.repository }}" --json assets -q '.assets[].id' | while read asset_id; do
-            echo "Deleting asset with ID: $asset_id"
-            gh api --method DELETE "/repos/${{ github.repository }}/releases/assets/$asset_id"
-          done
-          echo "All assets deleted."
+          if ! gh release view "${{ env.REPO_RELEASE_NAME }}" --repo "${{ github.repository }}" > /dev/null 2>&1; then
+            gh release create "${{ env.REPO_RELEASE_NAME }}" --repo "${{ github.repository }}" --title "${{ env.REPO_RELEASE_NAME }}" --notes "Arch Package Repository"
+          fi
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: archlinux
-          files: |
-            repo/${{ steps.package.outputs.path }}
-            repo/${{ steps.repo.outputs.path }}
-            repo/${{ steps.repo.outputs.files_path }}
-            repo/${{ steps.repo.outputs.path_zst }}
-            repo/${{ steps.repo.outputs.files_path_zst }}
-          token: ${{ github.token }}
-          overwrite_files: true
-
-      - name: Push updated PKGBUILD
+      - name: Update repository files
         shell: bash
-        working-directory: repo
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          git config --global --add safe.directory "$PWD"
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          gh release upload "${{ env.REPO_RELEASE_NAME }}" "repo/${{ steps.repo.outputs.path }}" --repo "${{ github.repository }}" --clobber
+          gh release upload "${{ env.REPO_RELEASE_NAME }}" "repo/${{ steps.repo.outputs.files_path }}" --repo "${{ github.repository }}" --clobber
+          gh release upload "${{ env.REPO_RELEASE_NAME }}" "repo/${{ steps.repo.outputs.path_zst }}" --repo "${{ github.repository }}" --clobber
+          gh release upload "${{ env.REPO_RELEASE_NAME }}" "repo/${{ steps.repo.outputs.files_path_zst }}" --repo "${{ github.repository }}" --clobber
 
-          git add PKGBUILD
-          git commit -m "Bump PKGBUILD to ${{ needs.check.outputs.latest_version }}-${{ needs.check.outputs.desired_pkgrel }}"
-          git push origin ${{ github.event.repository.default_branch }}
+          for pkg in $(find packages -name '*.pkg.tar.zst'); do
+            gh release upload "${{ env.REPO_RELEASE_NAME }}" "$pkg" --repo "${{ github.repository }}" --clobber
+          done
