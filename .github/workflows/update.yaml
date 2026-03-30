@@ -179,10 +179,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload "${{ env.REPO_RELEASE_NAME }}" "repo/${{ steps.repo.outputs.path }}" --repo "${{ github.repository }}" --clobber
-          gh release upload "${{ env.REPO_RELEASE_NAME }}" "repo/${{ steps.repo.outputs.files_path }}" --repo "${{ github.repository }}" --clobber
-          gh release upload "${{ env.REPO_RELEASE_NAME }}" "repo/${{ steps.repo.outputs.path_zst }}" --repo "${{ github.repository }}" --clobber
-          gh release upload "${{ env.REPO_RELEASE_NAME }}" "repo/${{ steps.repo.outputs.files_path_zst }}" --repo "${{ github.repository }}" --clobber
+          gh release upload "${{ env.REPO_RELEASE_NAME }}" "${{ steps.repo.outputs.path }}" --repo "${{ github.repository }}" --clobber
+          gh release upload "${{ env.REPO_RELEASE_NAME }}" "${{ steps.repo.outputs.files_path }}" --repo "${{ github.repository }}" --clobber
+          gh release upload "${{ env.REPO_RELEASE_NAME }}" "${{ steps.repo.outputs.path_zst }}" --repo "${{ github.repository }}" --clobber
+          gh release upload "${{ env.REPO_RELEASE_NAME }}" "${{ steps.repo.outputs.files_path_zst }}" --repo "${{ github.repository }}" --clobber
 
           for pkg in $(find packages -name '*.pkg.tar.zst'); do
             gh release upload "${{ env.REPO_RELEASE_NAME }}" "$pkg" --repo "${{ github.repository }}" --clobber
