@@ -1,0 +1,4 @@
+#!/usr/sbin/nft -f
+
+table inet mullvad-ts
+delete table inet mullvad-ts

@@ -1,0 +1,27 @@
+pkgname=mullvad-tailscale-split-tunnel
+# Version/rel is updated by CI, do not edit manually
+pkgver=0.0.0
+pkgrel=0
+pkgdesc='Split tunneling config for Mullvad VPN and Tailscale'
+arch=('x86_64')
+url="https://github.com/hypergonial/arch_repo/tree/main/mullvad-tailscale-split-tunnel"
+license=('MIT')
+depends=(systemd
+         nftables
+         iptables-nft
+         mullvad-vpn
+         tailscale)
+makedepends=(git)
+source=("mullvad-ts.rules"
+        "mullvad-ts-cleanup.rules"
+        "ts-service-ext.conf")
+sha256sums=('SKIP'
+            'SKIP'
+            'SKIP')
+
+package() {
+	# Copy nft.rules to the package directory
+    install -Dm744 "${srcdir}/mullvad-ts.rules" "${pkgdir}/usr/share/${pkgname}/mullvad-ts.rules"
+    install -Dm744 "${srcdir}/mullvad-ts-cleanup.rules" "${pkgdir}/usr/share/${pkgname}/mullvad-ts-cleanup.rules"
+    install -Dm644 "${srcdir}/ts-service-ext.conf" "${pkgdir}/usr/lib/systemd/system/tailscaled.service.d/10-${pkgname}.conf"
+}
