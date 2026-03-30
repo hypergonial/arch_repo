@@ -52,10 +52,9 @@ def get_package_info(package: str) -> PackageInfo:
 
 
 def main():
-    is_manual_trigger = (
-        "GITHUB_EVENT_NAME" in os.environ
-        and os.environ["GITHUB_EVENT_NAME"] == "workflow_dispatch"
-    )
+    force_update = os.environ.get("FORCE_UPDATE") == "true"
+
+    print(f"Force update: {force_update}")
 
     to_update: list[PackageInfo] = []
 
@@ -68,10 +67,10 @@ def main():
         print(f"  Current pkgrel: {pkg.current_pkgrel}")
         print(f"  Desired pkgrel: {pkg.desired_pkgrel}")
         print(
-            f"  Will update: {pkg.latest_version != pkg.current_pkgver or is_manual_trigger}"
+            f"  Will update: {pkg.latest_version != pkg.current_pkgver or force_update}"
         )
 
-        if pkg.latest_version != pkg.current_pkgver or is_manual_trigger:
+        if pkg.latest_version != pkg.current_pkgver or force_update:
             to_update.append(pkg)
 
     job_matrix: dict[str, list[dict[str, str | int]]] = {

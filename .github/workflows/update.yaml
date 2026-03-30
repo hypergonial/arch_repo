@@ -3,6 +3,12 @@ on:
   schedule:
     - cron: "15 4 * * *"
   workflow_dispatch:
+    inputs:
+      force_update:
+        description: "Force update all packages"
+        required: false
+        type: boolean
+        default: false
 
 env:
   REPO_RELEASE_NAME: "current"
@@ -30,6 +36,8 @@ jobs:
       - name: Check all packages for updates
         id: gen_matrix
         shell: bash
+        env:
+          FORCE_UPDATE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.force_update == 'true' }}
         run: |
           # Outputs: is_empty, matrix
           python3 .github/workflows/check_packages.py
