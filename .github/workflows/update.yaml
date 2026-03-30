@@ -94,7 +94,7 @@ jobs:
           CURRENT_VERSION: ${{ matrix.current_version }}
           CURRENT_PKGREL: ${{ matrix.current_pkgrel }}
         run: |
-          .github/scripts/update_pkgbuild.py
+          python3 .github/scripts/update_pkgbuild.py
 
       # TODO: Signing the package would be nice
 
