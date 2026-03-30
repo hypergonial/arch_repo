@@ -7,8 +7,8 @@ Fine, I'll do it myself
 Add to `/etc/pacman.conf`:
 
 ```ini
-[opencloud-desktop-bin]
+[hypergonial]
 # TODO: Change this to `Required` once I bother doing signing
 SigLevel = Never
-Server = https://github.com/hypergonial/opencloud-desktop-bin/releases/download/archlinux
+Server = https://github.com/hypergonial/arch_repo/releases/download/current
 ```
