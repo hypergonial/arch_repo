@@ -94,7 +94,9 @@ jobs:
           CURRENT_VERSION: ${{ matrix.current_version }}
           CURRENT_PKGREL: ${{ matrix.current_pkgrel }}
         run: |
-          python3 .github/scripts/update_pkgbuild.py
+          chown -R builder:builder .
+          sudo --preserve-env -u builder python3 .github/scripts/update_pkgbuild.py
+          chown -R root:root .
 
       # TODO: Signing the package would be nice
 
