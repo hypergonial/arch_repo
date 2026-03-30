@@ -4,6 +4,12 @@ import json
 import os
 import subprocess
 from dataclasses import dataclass
+import typing as t
+
+
+IGNORED_PACKAGES = {
+    "example",  # Example package, should be ignored by default
+}
 
 
 @dataclass
@@ -16,16 +22,34 @@ class PackageInfo:
     parallel_build: bool = True
 
 
-def call_pkgupdate(package: str, command: str) -> str:
+@t.overload
+def call_pkgupdate(
+    package: str, command: str, check: t.Literal[True] = True
+) -> str: ...
+
+
+@t.overload
+def call_pkgupdate(
+    package: str, command: str, check: t.Literal[False]
+) -> str | None: ...
+
+
+def call_pkgupdate(package: str, command: str, check: bool = True) -> str | None:
     """Call a function from the PKGUPDATE file and return its output."""
 
     res = subprocess.run(
         ["bash", "-lc", f"source ./PKGUPDATE && {command}"],
-        check=True,
         capture_output=True,
         text=True,
         cwd=package,
     )
+    if res.returncode != 0:
+        if not check:
+            return None
+        raise RuntimeError(
+            f"Command '{command}' failed for package '{package}': {res.stderr}"
+        )
+
     return res.stdout.strip()
 
 
@@ -33,7 +57,7 @@ def get_package_info(package: str) -> PackageInfo:
     """Extract the package info from the PKGBUILD and PKGUPDATE files."""
 
     latest_version = call_pkgupdate(package, "fetch_latest_version")
-    parallel_build = call_pkgupdate(package, "can_parallel_build") == "true"
+    parallel_build = call_pkgupdate(package, "parallel_build", check=False) == "true"
 
     with open(f"{package}/PKGBUILD", "r") as f:
         pkgbuild = f.readlines()
@@ -61,7 +85,7 @@ def find_packages(path: str = ".") -> list[str]:
     packages: list[str] = []
 
     for entry in os.listdir(path):
-        if entry.startswith("."):
+        if entry.startswith(".") or entry in IGNORED_PACKAGES:
             continue
 
         if not os.path.isdir(entry):

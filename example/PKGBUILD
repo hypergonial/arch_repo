@@ -1,0 +1,36 @@
+_pkgname=example
+pkgname=example-bin
+# Version/rel is updated by CI, do not edit manually
+pkgver=0.0.0
+pkgrel=0
+pkgdesc='example package'
+arch=('x86_64')
+url="https://github.com/hypergonial/arch_repo"
+license=('MIT')
+depends=(glibc
+         python
+         sqlite)
+makedepends=(git
+             rust)
+conflicts=('example')
+provides=('example')
+source=("${_pkgname}::git+https://github.com/example/repo.git#tag=v${pkgver}")
+# Updated by CI if pkgver changes
+# Run 'updpkgsums' to update this value if changing the 'source' array
+sha256sums=('SKIP')
+
+build() {
+	cmake \
+		-B build \
+		-S "$_pkgname" \
+		-DCMAKE_BUILD_TYPE=None \
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DCMAKE_SKIP_INSTALL_RPATH=ON \
+		-DBUILD_TESTING=OFF \
+		-DKDE_INSTALL_SYSCONFDIR=/etc
+	make -C build
+}
+
+package() {
+	make DESTDIR="${pkgdir}/" -C build install
+}
