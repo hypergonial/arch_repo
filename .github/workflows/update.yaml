@@ -118,9 +118,6 @@ jobs:
 
       # TODO: Signing the package would be nice
 
-      # This would be a better way to handle the "yes" prompt but "--ask" is not forwarded by makepkg to pacman:
-      # https://unix.stackexchange.com/questions/274727/how-to-force-pacman-to-answer-yes-to-all-questions/584001#584001
-
       - name: Make package
         id: package
         working-directory: repo/${{ matrix.name }}
