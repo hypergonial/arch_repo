@@ -5,7 +5,7 @@ Type = Package
 Target = discord-ptb
 
 [Action]
-Description = "Installing Vencord for Discord PTB..."
+Description = Installing Vencord for Discord PTB...
 When = PostTransaction
 Exec = /bin/sh -c "vencordinstallercli -install -branch ptb"
 Depends = vencord-installer-cli-bin
