@@ -1,7 +1,7 @@
 pkgname=vencord-install-hook
 # Version/rel is updated by CI, do not edit manually
-pkgver=0.0.0
-pkgrel=0
+pkgver=1.0.0
+pkgrel=1
 pkgdesc='Pacman hook for installing Vencord when installing/updating Discord'
 arch=('x86_64')
 url="https://github.com/hypergonial/arch_repo/tree/main/vencord-install-hook"
@@ -11,9 +11,9 @@ makedepends=(git)
 source=("install-vencord.hook"
         "install-vencord-ptb.hook"
         "install-vencord-canary.hook")
-sha256sums=('SKIP'
-            'SKIP'
-            'SKIP')
+sha256sums=('8b958ce3f2d08c1b877d7b48968878594b6051bc9a6a84af74ff7416a334ffa0'
+            '61fbc7e202939f860ea54a049cae3ad07212957fee8c700326198fc854dc910f'
+            '6454f557f581ae127d769862fb0f248b2f8840ba15bac6ee930a85ab9e6b6b8e')
 
 package() {
 	install -Dm644 "${srcdir}/install-vencord.hook" "${pkgdir}/usr/share/libalpm/hooks/install-vencord.hook"
