@@ -1,0 +1,11 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = discord
+
+[Action]
+Description = "Installing Vencord for Discord Stable..."
+When = PostTransaction
+Exec = /bin/sh -c "vencordinstallercli -install -branch stable"
+Depends = vencord-installer-cli-bin

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+# Bump the VERSION file and push to prompt a package update
+fetch_latest_version() {
+    version=$(cat VERSION)
+    echo "$version"
+}

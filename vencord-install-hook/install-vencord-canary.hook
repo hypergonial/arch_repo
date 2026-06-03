@@ -1,0 +1,11 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = discord-canary
+
+[Action]
+Description = "Installing Vencord for Discord Canary..."
+When = PostTransaction
+Exec = /bin/sh -c "vencordinstallercli -install -branch canary"
+Depends = vencord-installer-cli-bin
