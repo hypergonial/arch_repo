@@ -4,8 +4,8 @@
 _pkgname=opencloud-desktop
 pkgname=opencloud-desktop-bin
 # Version/rel is updated by CI, do not edit manually
-pkgver=3.0.3
-pkgrel=5
+pkgver=4.0.0
+pkgrel=1
 pkgdesc='opencloud desktop application (binary package)'
 arch=('x86_64')
 url="https://github.com/hypergonial/opencloud-desktop-bin"
@@ -29,7 +29,7 @@ provides=('opencloud-desktop')
 source=("${_pkgname}::git+https://github.com/opencloud-eu/desktop.git#tag=v${pkgver}")
 # Updated by CI if pkgver changes
 # Run 'updpkgsums' to update this value if changing the 'source' array
-sha256sums=('88cd6ea12aa9f84ccb31d66b573ae81837db3964d8f826ae2400a4ddabf776fb')
+sha256sums=('d01fb056c2aa208c3dc35efe8876d845efdc4573c544e57befd6e4bc9aaae0a9')
 
 build() {
 	cmake \
